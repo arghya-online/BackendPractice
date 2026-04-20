@@ -1,7 +1,6 @@
 import asyncHandler from "../utils/asyncHandler.js";
 import apiError from "../utils/apiError.js";
 import User from "../models/user.model.js";
-import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 import ApiResponse from "../utils/apiResponse.js";
@@ -20,11 +19,13 @@ const registerUser = asyncHandler(async (req, res) => {
   //Step 11: send response to the client
 
   //Step 1: getting the data from the request body
-  const { fullName, email, username, password } = req.body;
-  console.log(`User ${fullName} mail is registered with ${email}`);
+  const { fullName, fullname, name, email, username, password } = req.body;
+  const resolvedFullName = fullName ?? fullname ?? name;
+  console.log("registerUser body:", { ...req.body, password: "********" });
+  console.log(`User ${resolvedFullName} is registered with ${email}`);
 
   //Step 2: check if all the fields are present or not
-  if (!username || !email || !password || !fullName) {
+  if (!username || !email || !password || !resolvedFullName) {
     throw new apiError(400, "All fields are required");
   }
 
@@ -39,9 +40,9 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   //Step 4: check for images and files
-  //req.files?.avater[0]?.path
-  const avatarLocalPath = req.files?.avatar?.path ?? null;
-  const coverPhotoLocalPath = req.files?.coverPhoto?.path ?? null;
+  //req.files?.avatar?.[0]?.path
+  const avatarLocalPath = req.files?.avatar?.[0]?.path ?? null;
+  const coverPhotoLocalPath = req.files?.coverPhoto?.[0]?.path ?? null;
   console.log(avatarLocalPath);
   console.log(coverPhotoLocalPath);
 
@@ -59,16 +60,14 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new apiError(500, "Error uploading images to Cloudinary");
   }
 
-  //Step 6: hash the password
-  hashedPassword = await bcrypt.hash(password, 10);
-
   //Step 7: save the user to the database
   //Step 8: create user object - create entry in db
   const user = await User.create({
     fullName,
+    fullName: resolvedFullName,
     email,
     username: username.toLowerCase().trim(),
-    password: hashedPassword,
+    password,
     avatar: avatar.secure_url,
     coverPhoto: coverPhoto.secure_url,
   });
@@ -86,6 +85,6 @@ const registerUser = asyncHandler(async (req, res) => {
   return res
     .status(201)
     .json(new ApiResponse(201, "User created successfully", createdUser));
-4});
+});
 
 export { registerUser };
