@@ -5,6 +5,11 @@ import jwt from "jsonwebtoken";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 import ApiResponse from "../utils/apiResponse.js";
 
+const cookieOptions = {
+  httpOnly: true,
+  secure: false,
+};
+
 const registerUser = asyncHandler(async (req, res) => {
   //Step 1: destructure the request body
   //Step 2: check if all the fields are present or not
@@ -63,7 +68,6 @@ const registerUser = asyncHandler(async (req, res) => {
   //Step 7: save the user to the database
   //Step 8: create user object - create entry in db
   const user = await User.create({
-    fullName,
     fullName: resolvedFullName,
     email,
     username: username.toLowerCase().trim(),
@@ -87,4 +91,66 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, "User created successfully", createdUser));
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+  //Step 1: destructure the request body
+  //Step 2: check if all the fields are present or not
+  //Step 3: check if user exists or not
+  //Step 4: compare the password
+  //Step 5: generate token
+  //Step 6: send response to the client
+
+  //Step 1: getting the data from the request body
+  const { email, username, password } = req.body;
+  const loginIdentifier = email ?? username;
+  console.log(`Login attempt for: ${loginIdentifier}`);
+
+  //Step 2: check if all the fields are present or not
+  if (!loginIdentifier || !password) {
+    throw new apiError(400, "All fields are required");
+  }
+  //Step 3: check if user exists or not
+  const user = await User.findOne({
+    $or: [
+      { email: loginIdentifier.toLowerCase().trim() },
+      { username: loginIdentifier.toLowerCase().trim() },
+    ],
+  });
+  if (!user) {
+    throw new apiError(404, "User not found");
+  }
+
+  //Step 4: compare the password
+  const isPasswordValid = await user.isPasswordValid(password);
+
+  if (!isPasswordValid) {
+    throw new apiError(401, "Invalid password");
+  }
+
+  //Step 5: generate token
+  const accessToken = user.generateAccessToken();
+  const refreshToken = user.generateRefreshToken();
+  user.refreshToken = refreshToken;
+  await user.save();
+
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken",
+  );
+
+  if (!loggedInUser) {
+    throw new apiError(500, "Error logging in user");
+  }
+
+  //Step 6: send response to the client
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
+    .json(
+      new ApiResponse(200, "User logged in successfully", {
+        user: loggedInUser,
+        accessToken,
+        refreshToken,
+      }),
+    );
+});
+export { registerUser, loginUser };
