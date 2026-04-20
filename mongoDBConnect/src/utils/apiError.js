@@ -17,3 +17,5 @@ class ApiError extends Error {
     }
   }
 }
+
+//This entire code apiError.js is used to create a custom error class called ApiError that extends the built-in Error class in JavaScript. in other filer, middlewares, controllers, we can throw an instance of this ApiError class whenever we want to indicate that an error has occurred.

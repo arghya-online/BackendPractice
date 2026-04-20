@@ -1,16 +1,8 @@
-// // const asyncHandler = (fn) => (req, res, next) => {
+// This helper wraps async Express route handlers.
+// If the route throws an error, it forwards that error to `next()`.
+// That keeps try-catch blocks out of every controller.
+//It can be written in different ways but this is the most common way to write it.
 
-// const asyncHandler = (fn) => {
-//   return (req, res, next) => {
-//     Promise.resolve(fn(req, res, next)).catch((err) => next(err));
-//   };
-// };
-
-// //the func takes
-
-// export { asyncHandler };
-
-//this async handler is used to wrap async functions in express routes, so that any errors thrown in the async function will be caught and passed to the next middleware (which is usually an error handler). This helps to avoid having to write try-catch blocks in every route handler and keeps the code cleaner.
 const asyncHandler = (requestHandler) => {
   return async (req, res, next) => {
     try {
@@ -21,4 +13,4 @@ const asyncHandler = (requestHandler) => {
   };
 };
 
-export { asyncHandler };
+export default asyncHandler;
