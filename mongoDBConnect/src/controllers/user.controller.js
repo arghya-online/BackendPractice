@@ -5,9 +5,19 @@ import jwt from "jsonwebtoken";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 import ApiResponse from "../utils/apiResponse.js";
 
-const cookieOptions = {
-  httpOnly: true,
-  secure: false,
+const generateAccessAndRefreshToken = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+
+    user.refreshToken = refreshToken; // Save the refresh token in the database
+    await user.save({ validateBeforeSave: false }); // Save the user without running validation
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new apiError(500, "Error generating tokens");
+  }
 };
 
 const registerUser = asyncHandler(async (req, res) => {
@@ -96,24 +106,26 @@ const loginUser = asyncHandler(async (req, res) => {
   //Step 2: check if all the fields are present or not
   //Step 3: check if user exists or not
   //Step 4: compare the password
-  //Step 5: generate token
-  //Step 6: send response to the client
+  //Step 5: generate token ->access token and refresh token
+  //Step 6: send cookie and response to the client
 
-  //Step 1: getting the data from the request body
+  /* Login Process Starts Here */
+
+  //Step 1: getting the data from the request body]
   const { email, username, password } = req.body;
-  const loginIdentifier = email ?? username;
-  console.log(`Login attempt for: ${loginIdentifier}`);
+  console.log(`Username: ${username} is trying to login with email: ${email}`);
 
   //Step 2: check if all the fields are present or not
-  if (!loginIdentifier || !password) {
-    throw new apiError(400, "All fields are required");
+  if (!email && !username) {
+    throw new apiError(400, "Email or username is required");
   }
+  if (!password) {
+    throw new apiError(400, "Password is required");
+  }
+
   //Step 3: check if user exists or not
   const user = await User.findOne({
-    $or: [
-      { email: loginIdentifier.toLowerCase().trim() },
-      { username: loginIdentifier.toLowerCase().trim() },
-    ],
+    $or: [{ email }, { username }],
   });
   if (!user) {
     throw new apiError(404, "User not found");
@@ -121,36 +133,51 @@ const loginUser = asyncHandler(async (req, res) => {
 
   //Step 4: compare the password
   const isPasswordValid = await user.isPasswordValid(password);
-
   if (!isPasswordValid) {
-    throw new apiError(401, "Invalid password");
+    throw new apiError(401, "Invalid Password");
   }
 
-  //Step 5: generate token
-  const accessToken = user.generateAccessToken();
-  const refreshToken = user.generateRefreshToken();
-  user.refreshToken = refreshToken;
-  await user.save();
+  //Step 5: generate token ->access token and refresh token
 
-  const loggedInUser = await User.findById(user._id).select(
-    "-password -refreshToken",
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+    user._id,
   );
 
-  if (!loggedInUser) {
-    throw new apiError(500, "Error logging in user");
-  }
+  //Step 6: send cookie and response to the client
+  const loggedInUser = await User.findByIdAndUpdate(
+    user._id,
+    { refreshToken }, // Save the refresh token in the database
+    { new: true }.select("-password -refreshToken"), // to exclude password and refresh token from the response
+  );
 
-  //Step 6: send response to the client
+  const cookieOptions = {
+    httpOnly: true,
+    secure: false,
+  };
+
+  //Step 7: send response to the client
   return res
     .status(200)
     .cookie("accessToken", accessToken, cookieOptions)
-    .cookie("refreshToken", refreshToken, cookieOptions)
+    .cookie("refreshToken", refreshToken)
     .json(
-      new ApiResponse(200, "User logged in successfully", {
+      new ApiResponse(200, {
         user: loggedInUser,
         accessToken,
         refreshToken,
       }),
     );
 });
-export { registerUser, loginUser };
+
+const logoutUser = asyncHandler(async (req, res) => {
+  //Step 1: get the user id from the request object
+  //Step 2: find the user in the database and remove the refresh token
+  //Step 3: clear the cookies and send response to the client
+
+  /* Logout Process Starts Here */
+
+  //Step 1: get the user id from the request object
+  req.user._id;
+});
+
+export { registerUser, loginUser, logoutUser };
